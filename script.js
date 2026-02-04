@@ -1,8 +1,7 @@
-const CONCURRENCY = 3;
+const CONCURRENCY = 2;
 
 async function run() {
-  const input = document.getElementById("urls").value;
-  const urls = input
+  const urls = document.getElementById("urls").value
     .split("\n")
     .map(u => u.trim())
     .filter(Boolean);
@@ -22,44 +21,37 @@ async function run() {
 
 async function worker(queue, results) {
   while (queue.length) {
-    const url = queue.shift();
-    await checkUrl(url, results);
+    await checkUrl(queue.shift(), results);
   }
 }
 
 async function checkUrl(url, results) {
   const card = document.createElement("div");
   card.className = "card";
-  card.innerHTML = `
-    <div class="domain">${url}</div>
-    <div>Checking…</div>
-  `;
+  card.innerHTML = `<div class="domain">${url}</div><div>Checking…</div>`;
   results.appendChild(card);
 
   try {
-    const res = await fetch("/.netlify/functions/pagespeed", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        url,
-        strategy: "mobile"
-      })
-    });
-
-    const data = await res.json();
-
-    if (!res.ok || data.error) {
-      throw new Error(data.error || "Failed");
-    }
+    const [mobile, desktop] = await Promise.all([
+      fetchPSI(url, "mobile"),
+      fetchPSI(url, "desktop")
+    ]);
 
     card.innerHTML = `
       <div class="domain">${url}</div>
-      <div class="score ${scoreColor(data.score)}">${data.score}</div>
-      <small>LCP: ${data.metrics.lcp}</small><br>
-      <small>CLS: ${data.metrics.cls}</small><br>
-      <small>INP: ${data.metrics.inp}</small>
+
+      <div class="scores">
+        ${scoreBox("Mobile", mobile.score)}
+        ${scoreBox("Desktop", desktop.score)}
+      </div>
+
+      <div class="metrics">
+        <strong>Mobile</strong><br>
+        LCP: ${mobile.metrics.lcp} | CLS: ${mobile.metrics.cls} | INP: ${mobile.metrics.inp}
+        <br><br>
+        <strong>Desktop</strong><br>
+        LCP: ${desktop.metrics.lcp} | CLS: ${desktop.metrics.cls} | INP: ${desktop.metrics.inp}
+      </div>
     `;
   } catch (err) {
     card.innerHTML = `
@@ -69,8 +61,36 @@ async function checkUrl(url, results) {
   }
 }
 
-function scoreColor(score) {
-  if (score >= 90) return "green";
-  if (score >= 50) return "yellow";
-  return "red";
+async function fetchPSI(url, strategy) {
+  const res = await fetch("/.netlify/functions/pagespeed", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ url, strategy })
+  });
+
+  const text = await res.text();
+
+  if (!res.ok) {
+    throw new Error(text);
+  }
+
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    throw new Error("Invalid response from server");
+  }
+
+  if (data.error) throw new Error(data.error);
+  return data;
+}
+
+function scoreBox(label, score) {
+  const color = score >= 90 ? "green" : score >= 50 ? "yellow" : "red";
+  return `
+    <div class="score-box ${color}">
+      ${score}
+      <div class="label">${label}</div>
+    </div>
+  `;
 }
