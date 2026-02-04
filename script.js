@@ -1,22 +1,6 @@
 let completed = 0;
 let total = 0;
 
-/* ---------------- CLONE DETECTION ---------------- */
-
-const CLONE_KEYWORDS = [
-  "slot", "slots", "gacor", "resmi", "apk",
-  "jaya", "login", "maxwin", "rtp", "hoki"
-];
-
-const CLONE_TLDS = [".xyz", ".top", ".site"];
-
-function isLikelyCloned(url) {
-  const u = url.toLowerCase();
-  if (CLONE_KEYWORDS.some(k => u.includes(k))) return true;
-  if (CLONE_TLDS.some(tld => u.endsWith(tld))) return true;
-  return false;
-}
-
 /* ---------------- 301 DETECTION ---------------- */
 
 async function isRedirectDomain(url) {
@@ -83,7 +67,7 @@ async function runCheck(url, card) {
     <div>Checking…</div>
   `;
 
-  /* 🔁 1. 301 CHECK — HIGHEST PRIORITY */
+  /* 🔁 1. 301 CHECK (HIGHEST PRIORITY) */
   const is301 = await isRedirectDomain(url);
   if (is301) {
     card.innerHTML = `
@@ -91,7 +75,6 @@ async function runCheck(url, card) {
         ${url}
         <span class="badge redirect">301</span>
       </div>
-
       <div class="error">
         301 domain detected.<br>
         PageSpeed checking skipped.
@@ -100,27 +83,7 @@ async function runCheck(url, card) {
     return;
   }
 
-  /* 🚫 2. CLONED CHECK — ONLY IF NOT 301 */
-  if (isLikelyCloned(url)) {
-    card.innerHTML = `
-      <div class="domain">
-        ${url}
-        <span class="badge cloned">Cloned</span>
-      </div>
-
-      <div class="error">
-        PageSpeed too low – likely a cloned site.<br>
-        PageSpeed checking skipped.
-      </div>
-
-      <div class="actions">
-        <button onclick="openPSI('${url}','mobile')">Open PageSpeed</button>
-      </div>
-    `;
-    return;
-  }
-
-  /* ✅ 3. REAL PSI CHECK */
+  /* ✅ 2. PSI CHECK */
   try {
     const mobile = await fetchPSI(url, "mobile");
     const desktop = await fetchPSI(url, "desktop");
@@ -152,9 +115,26 @@ async function runCheck(url, card) {
       </div>
     `;
   } catch (err) {
-    handlePsiFailure(url, card, err.message);
+    /* 🚫 3. PSI FAILURE = CLONED */
+    card.innerHTML = `
+      <div class="domain">
+        ${url}
+        <span class="badge cloned">Cloned</span>
+      </div>
+
+      <div class="error">
+        PageSpeed too low – likely a cloned site.<br>
+        PageSpeed checking skipped.
+      </div>
+
+      <div class="actions">
+        <button onclick="retryCard('${url}', this)">Retry</button>
+        <button onclick="openPSI('${url}','mobile')">Open PageSpeed</button>
+      </div>
+    `;
   }
 }
+
 
 /* ---------------- ERROR HANDLING ---------------- */
 
@@ -238,4 +218,5 @@ function scoreBox(label, score) {
     </div>
   `;
 }
+
 
