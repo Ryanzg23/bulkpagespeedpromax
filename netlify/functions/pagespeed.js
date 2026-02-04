@@ -6,11 +6,10 @@ export async function handler(event) {
     if (!url) {
       return {
         statusCode: 400,
-        body: JSON.stringify({ error: "URL is required" })
+        body: JSON.stringify({ error: "URL required" })
       };
     }
 
-    // ✅ Normalize URL
     if (!url.startsWith("http://") && !url.startsWith("https://")) {
       url = "https://" + url;
     }
