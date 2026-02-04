@@ -54,3 +54,4 @@ export async function handler(event) {
     };
   }
 }
+console.log("PSI key exists:", !!process.env.PSI_API_KEY);
