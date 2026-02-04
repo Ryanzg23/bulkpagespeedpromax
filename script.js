@@ -2,22 +2,23 @@ const CONCURRENCY = 1;
 let completed = 0;
 let total = 0;
 
+/* ---------------- CLONE DETECTION ---------------- */
+
 const CLONE_KEYWORDS = [
   "slot", "slots", "gacor", "resmi", "apk", "jaya",
   "login", "maxwin", "rtp", "hoki"
 ];
 
-const CLONE_TLDS = [".xyz", ".org", ".top", ".site"];
+const CLONE_TLDS = [".xyz", ".top", ".site"];
 
 function isLikelyCloned(url) {
   const u = url.toLowerCase();
-
   if (CLONE_KEYWORDS.some(k => u.includes(k))) return true;
   if (CLONE_TLDS.some(tld => u.endsWith(tld))) return true;
-
   return false;
 }
 
+/* ---------------- ENTRY POINT (BUTTON) ---------------- */
 
 async function run() {
   const urls = document.getElementById("urls").value
@@ -33,22 +34,16 @@ async function run() {
   results.innerHTML = "";
 
   const queue = [...urls];
-  const workers = [];
 
-  for (let i = 0; i < CONCURRENCY; i++) {
-    workers.push(worker(queue, results));
-  }
-
-  await Promise.all(workers);
-}
-
-async function worker(queue, results) {
   while (queue.length) {
-    await createCard(queue.shift(), results);
+    const url = queue.shift();
+    await createCard(url, results);
     completed++;
     updateProgress();
   }
 }
+
+/* ---------------- PROGRESS ---------------- */
 
 function updateProgress() {
   const bar = document.getElementById("progressBar");
@@ -57,7 +52,7 @@ function updateProgress() {
   bar.textContent = `${completed} / ${total}`;
 }
 
-/* ---------------- CARD HANDLING ---------------- */
+/* ---------------- CARD LIFECYCLE ---------------- */
 
 function createCard(url, results) {
   const card = document.createElement("div");
@@ -67,7 +62,7 @@ function createCard(url, results) {
 }
 
 async function runCheck(url, card) {
-  // 🚫 AUTO-SKIP CLONED SITES
+  /* 🚫 AUTO-SKIP CLONED SITES */
   if (isLikelyCloned(url)) {
     card.innerHTML = `
       <div class="domain">
@@ -87,7 +82,6 @@ async function runCheck(url, card) {
     return;
   }
 
-  // NORMAL PSI FLOW
   card.innerHTML = `
     <div class="domain">${url}</div>
     <div>Checking PageSpeed…</div>
@@ -123,9 +117,8 @@ async function runCheck(url, card) {
     handlePsiFailure(url, card, err.message);
   }
 }
-}
 
-/* ---------------- ERROR CLASSIFICATION ---------------- */
+/* ---------------- ERROR HANDLING ---------------- */
 
 function handlePsiFailure(url, card, message) {
   const lower = message.toLowerCase();
@@ -137,7 +130,11 @@ function handlePsiFailure(url, card, message) {
 
   if (isTimeout) {
     card.innerHTML = `
-      <div class="domain">${url}</div>
+      <div class="domain">
+        ${url}
+        <span class="badge cloned">Cloned</span>
+      </div>
+
       <div class="error">
         PageSpeed too low – likely a cloned site.<br>
         PageSpeed checking skipped.
@@ -152,7 +149,6 @@ function handlePsiFailure(url, card, message) {
     card.innerHTML = `
       <div class="domain">${url}</div>
       <div class="error">${message}</div>
-
       <div class="actions">
         <button onclick="retryCard('${url}', this)">Retry</button>
       </div>
@@ -203,5 +199,3 @@ function scoreBox(label, score) {
     </div>
   `;
 }
-
-
