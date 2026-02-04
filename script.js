@@ -46,10 +46,12 @@ async function runCheck(url, card) {
 
   const mobile = await fetchPSI(url, "mobile");
 
-  /* 301 DOMAIN */
+  /* ---------- 301 DOMAIN ---------- */
   if (mobile.type === "redirect") {
     const from = new URL(mobile.from).hostname.replace(/^www\./, "");
     const to = new URL(mobile.to).hostname.replace(/^www\./, "");
+
+    const link = getFallbackLink(url);
 
     card.innerHTML = `
       <div class="domain">
@@ -62,15 +64,17 @@ async function runCheck(url, card) {
         PageSpeed checking skipped.
       </div>
       <div class="actions">
-        <a href="${getPageSpeedLink(url)}" target="_blank">PageSpeed Result</a>
-        <button onclick="copyPageSpeedLink('${url}', this)">Copy Link</button>
+        <a href="${link}" target="_blank">PageSpeed Result</a>
+        <button onclick="copyCustomLink('${link}', this)">Copy Link</button>
       </div>
     `;
     return;
   }
 
-  /* CLONED */
+  /* ---------- CLONED ---------- */
   if (mobile.type === "cloned") {
+    const link = getFallbackLink(url);
+
     card.innerHTML = `
       <div class="domain">
         ${url}
@@ -81,15 +85,17 @@ async function runCheck(url, card) {
         PageSpeed checking skipped.
       </div>
       <div class="actions">
-        <a href="${getPageSpeedLink(url)}" target="_blank">PageSpeed Result</a>
-        <button onclick="copyPageSpeedLink('${url}', this)">Copy Link</button>
+        <a href="${link}" target="_blank">PageSpeed Result</a>
+        <button onclick="copyCustomLink('${link}', this)">Copy Link</button>
       </div>
     `;
     return;
   }
 
-  /* DESKTOP PSI */
+  /* ---------- DESKTOP PSI ---------- */
   const desktop = await fetchPSI(url, "desktop");
+
+  const reportLink = mobile.reportUrl || getFallbackLink(url);
 
   card.innerHTML = `
     <div class="domain">${url}</div>
@@ -112,8 +118,8 @@ async function runCheck(url, card) {
     </div>
 
     <div class="actions">
-      <a href="${getPageSpeedLink(url)}" target="_blank">PageSpeed Result</a>
-      <button onclick="copyPageSpeedLink('${url}', this)">Copy Link</button>
+      <a href="${reportLink}" target="_blank">PageSpeed Result</a>
+      <button onclick="copyCustomLink('${reportLink}', this)">Copy Link</button>
     </div>
   `;
 }
@@ -129,21 +135,22 @@ async function fetchPSI(url, strategy) {
   return await res.json();
 }
 
-/* ---------------- UTIL ---------------- */
+/* ---------------- LINK HELPERS ---------------- */
 
-function getPageSpeedLink(url) {
+function getFallbackLink(url) {
   if (!url.startsWith("http")) url = "https://" + url;
   return `https://pagespeed.web.dev/report?url=${encodeURIComponent(url)}`;
 }
 
-function copyPageSpeedLink(url, btn) {
-  const link = getPageSpeedLink(url);
+function copyCustomLink(link, btn) {
   navigator.clipboard.writeText(link).then(() => {
-    const t = btn.textContent;
+    const original = btn.textContent;
     btn.textContent = "Copied!";
-    setTimeout(() => (btn.textContent = t), 1200);
+    setTimeout(() => (btn.textContent = original), 1200);
   });
 }
+
+/* ---------------- UI HELPERS ---------------- */
 
 function scoreBox(label, score) {
   const color = score >= 90 ? "green" : score >= 50 ? "yellow" : "red";
