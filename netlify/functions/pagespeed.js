@@ -1,7 +1,3 @@
-/* -------------------------------------------------
-   Helpers
-------------------------------------------------- */
-
 function getRootDomain(url) {
   try {
     const { hostname } = new URL(url);
@@ -11,110 +7,61 @@ function getRootDomain(url) {
   }
 }
 
-/* -------------------------------------------------
-   Handler
-------------------------------------------------- */
-
 export async function handler(event) {
   try {
     const { url, strategy } = JSON.parse(event.body || "{}");
-
     if (!url || !strategy) {
-      return {
-        statusCode: 400,
-        body: JSON.stringify({ type: "error", message: "Invalid request" })
-      };
+      return { statusCode: 400, body: JSON.stringify({ type: "error" }) };
     }
 
     const finalUrl = url.startsWith("http") ? url : "https://" + url;
 
-    /* ---------------------------------------------
-       1️⃣ REDIRECT DETECTION (ROOT-DOMAIN AWARE)
-       - http ↔ https  ❌ ignore
-       - www ↔ non-www ❌ ignore
-       - domain → other domain ✅ 301
-    --------------------------------------------- */
-
+    /* ---- REDIRECT CHECK (ROOT DOMAIN CHANGE ONLY) ---- */
     try {
-      const headRes = await fetch(finalUrl, {
-        method: "HEAD",
-        redirect: "manual"
-      });
-
-      if ([301, 302, 307, 308].includes(headRes.status)) {
-        const location = headRes.headers.get("location");
-
-        if (location) {
-          const absoluteLocation = location.startsWith("http")
-            ? location
-            : new URL(location, finalUrl).href;
-
-          const fromRoot = getRootDomain(finalUrl);
-          const toRoot = getRootDomain(absoluteLocation);
-
-          // ✅ Only mark 301 if ROOT DOMAIN CHANGES
-          if (fromRoot && toRoot && fromRoot !== toRoot) {
+      const head = await fetch(finalUrl, { method: "HEAD", redirect: "manual" });
+      if ([301,302,307,308].includes(head.status)) {
+        const loc = head.headers.get("location");
+        if (loc) {
+          const abs = loc.startsWith("http") ? loc : new URL(loc, finalUrl).href;
+          if (getRootDomain(finalUrl) !== getRootDomain(abs)) {
             return {
               statusCode: 200,
-              body: JSON.stringify({
-                type: "redirect",
-                from: finalUrl,
-                to: absoluteLocation
-              })
+              body: JSON.stringify({ type: "redirect", from: finalUrl, to: abs })
             };
           }
         }
       }
-    } catch {
-      // Ignore redirect detection errors and continue
-    }
+    } catch {}
 
-    /* ---------------------------------------------
-       2️⃣ PAGE SPEED INSIGHTS
-    --------------------------------------------- */
-
-    const apiKey = process.env.PSI_API_KEY;
-
+    /* ---- PSI ---- */
     const apiUrl =
       "https://www.googleapis.com/pagespeedonline/v5/runPagespeed" +
-      `?url=${encodeURIComponent(finalUrl)}` +
-      `&strategy=${strategy}` +
-      `&key=${apiKey}`;
+      `?url=${encodeURIComponent(finalUrl)}&strategy=${strategy}` +
+      `&key=${process.env.PSI_API_KEY}`;
 
     const res = await fetch(apiUrl);
     const data = await res.json();
 
-    // PSI failed / blocked / unusable → treat as cloned
     if (!res.ok || !data.lighthouseResult) {
-      return {
-        statusCode: 200,
-        body: JSON.stringify({ type: "cloned" })
-      };
+      return { statusCode: 200, body: JSON.stringify({ type: "cloned" }) };
     }
 
     const audits = data.lighthouseResult.audits || {};
-    const getAudit = (id) => audits[id]?.displayValue || "N/A";
+    const get = id => audits[id]?.displayValue || "N/A";
 
     return {
       statusCode: 200,
       body: JSON.stringify({
         type: "ok",
-        score: Math.round(
-          data.lighthouseResult.categories.performance.score * 100
-        ),
+        score: Math.round(data.lighthouseResult.categories.performance.score * 100),
         metrics: {
-          lcp: getAudit("largest-contentful-paint"),
-          cls: getAudit("cumulative-layout-shift"),
-          inp: getAudit("interaction-to-next-paint")
+          lcp: get("largest-contentful-paint"),
+          cls: get("cumulative-layout-shift"),
+          inp: get("interaction-to-next-paint")
         }
       })
     };
-
   } catch {
-    // Any unexpected error → cloned (PSI unusable)
-    return {
-      statusCode: 200,
-      body: JSON.stringify({ type: "cloned" })
-    };
+    return { statusCode: 200, body: JSON.stringify({ type: "cloned" }) };
   }
 }
