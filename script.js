@@ -27,7 +27,7 @@ async function run() {
 
 async function worker(queue, results) {
   while (queue.length) {
-    await checkUrl(queue.shift(), results);
+    await createCard(queue.shift(), results);
     completed++;
     updateProgress();
   }
@@ -40,11 +40,20 @@ function updateProgress() {
   bar.textContent = `${completed} / ${total}`;
 }
 
-async function checkUrl(url, results) {
+/* ---------------- CARD HANDLING ---------------- */
+
+function createCard(url, results) {
   const card = document.createElement("div");
   card.className = "card";
-  card.innerHTML = `<div class="domain">${url}</div><div>Checking mobile…</div>`;
   results.appendChild(card);
+  return runCheck(url, card);
+}
+
+async function runCheck(url, card) {
+  card.innerHTML = `
+    <div class="domain">${url}</div>
+    <div>Checking PageSpeed…</div>
+  `;
 
   try {
     const mobile = await fetchPSI(url, "mobile");
@@ -67,21 +76,59 @@ async function checkUrl(url, results) {
       </div>
 
       <div class="actions">
-        <button onclick="retry('${url}')">Retry</button>
+        <button onclick="retryCard('${url}', this)">Retry</button>
         <button onclick="openPSI('${url}','mobile')">Open Mobile</button>
         <button onclick="openPSI('${url}','desktop')">Open Desktop</button>
       </div>
     `;
   } catch (err) {
+    handlePsiFailure(url, card, err.message);
+  }
+}
+
+/* ---------------- ERROR CLASSIFICATION ---------------- */
+
+function handlePsiFailure(url, card, message) {
+  const lower = message.toLowerCase();
+
+  const isTimeout =
+    lower.includes("timeout") ||
+    lower.includes("sandbox") ||
+    lower.includes("timed out");
+
+  if (isTimeout) {
     card.innerHTML = `
       <div class="domain">${url}</div>
-      <div class="error">${err.message}</div>
+      <div class="error">
+        PageSpeed too low – likely cloned / low-quality site.<br>
+        PageSpeed checking skipped.
+      </div>
+
       <div class="actions">
-        <button onclick="retry('${url}')">Retry</button>
+        <button onclick="retryCard('${url}', this)">Retry</button>
+        <button onclick="openPSI('${url}','mobile')">Open PageSpeed</button>
+      </div>
+    `;
+  } else {
+    card.innerHTML = `
+      <div class="domain">${url}</div>
+      <div class="error">${message}</div>
+
+      <div class="actions">
+        <button onclick="retryCard('${url}', this)">Retry</button>
       </div>
     `;
   }
 }
+
+/* ---------------- RETRY (SAME CARD) ---------------- */
+
+function retryCard(url, btn) {
+  const card = btn.closest(".card");
+  runCheck(url, card);
+}
+
+/* ---------------- PSI FETCH ---------------- */
 
 async function fetchPSI(url, strategy) {
   const res = await fetch("/.netlify/functions/pagespeed", {
@@ -98,9 +145,7 @@ async function fetchPSI(url, strategy) {
   return data;
 }
 
-function retry(url) {
-  checkUrl(url, document.getElementById("results"));
-}
+/* ---------------- UTIL ---------------- */
 
 function openPSI(url, strategy) {
   if (!url.startsWith("http")) url = "https://" + url;
