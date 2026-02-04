@@ -100,7 +100,7 @@ function handlePsiFailure(url, card, message) {
     card.innerHTML = `
       <div class="domain">${url}</div>
       <div class="error">
-        PageSpeed too low – likely cloned / low-quality site.<br>
+        PageSpeed too low – likely a cloned site.<br>
         PageSpeed checking skipped.
       </div>
 
@@ -164,3 +164,4 @@ function scoreBox(label, score) {
     </div>
   `;
 }
+
