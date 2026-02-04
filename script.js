@@ -67,9 +67,10 @@ async function runCheck(url, card) {
     <div>Checking…</div>
   `;
 
-  /* 🔁 1. 301 CHECK (HIGHEST PRIORITY) */
-  const is301 = await isRedirectDomain(url);
-  if (is301) {
+  // MOBILE
+  const mobile = await fetchPSI(url, "mobile");
+
+  if (mobile.type === "redirect") {
     card.innerHTML = `
       <div class="domain">
         ${url}
@@ -83,57 +84,54 @@ async function runCheck(url, card) {
     return;
   }
 
-  /* ✅ 2. PSI CHECK */
-  try {
-    const mobile = await fetchPSI(url, "mobile");
-    const desktop = await fetchPSI(url, "desktop");
-
-    card.innerHTML = `
-      <div class="domain">${url}</div>
-
-      <div class="scores">
-        ${scoreBox("Mobile", mobile.score)}
-        ${scoreBox("Desktop", desktop.score)}
-      </div>
-
-      <div class="metrics">
-        <strong>Mobile</strong><br>
-        LCP: ${mobile.metrics.lcp} |
-        CLS: ${mobile.metrics.cls} |
-        INP: ${mobile.metrics.inp}
-        <br><br>
-        <strong>Desktop</strong><br>
-        LCP: ${desktop.metrics.lcp} |
-        CLS: ${desktop.metrics.cls} |
-        INP: ${desktop.metrics.inp}
-      </div>
-
-      <div class="actions">
-        <button onclick="retryCard('${url}', this)">Retry</button>
-        <button onclick="openPSI('${url}','mobile')">Open Mobile</button>
-        <button onclick="openPSI('${url}','desktop')">Open Desktop</button>
-      </div>
-    `;
-  } catch (err) {
-    /* 🚫 3. PSI FAILURE = CLONED */
+  if (mobile.type === "cloned") {
     card.innerHTML = `
       <div class="domain">
         ${url}
         <span class="badge cloned">Cloned</span>
       </div>
-
       <div class="error">
         PageSpeed too low – likely a cloned site.<br>
         PageSpeed checking skipped.
       </div>
-
       <div class="actions">
-        <button onclick="retryCard('${url}', this)">Retry</button>
         <button onclick="openPSI('${url}','mobile')">Open PageSpeed</button>
       </div>
     `;
+    return;
   }
+
+  // DESKTOP
+  const desktop = await fetchPSI(url, "desktop");
+
+  card.innerHTML = `
+    <div class="domain">${url}</div>
+
+    <div class="scores">
+      ${scoreBox("Mobile", mobile.score)}
+      ${scoreBox("Desktop", desktop.score)}
+    </div>
+
+    <div class="metrics">
+      <strong>Mobile</strong><br>
+      LCP: ${mobile.metrics.lcp} |
+      CLS: ${mobile.metrics.cls} |
+      INP: ${mobile.metrics.inp}
+      <br><br>
+      <strong>Desktop</strong><br>
+      LCP: ${desktop.metrics.lcp} |
+      CLS: ${desktop.metrics.cls} |
+      INP: ${desktop.metrics.inp}
+    </div>
+
+    <div class="actions">
+      <button onclick="retryCard('${url}', this)">Retry</button>
+      <button onclick="openPSI('${url}','mobile')">Open Mobile</button>
+      <button onclick="openPSI('${url}','desktop')">Open Desktop</button>
+    </div>
+  `;
 }
+
 
 
 /* ---------------- ERROR HANDLING ---------------- */
@@ -187,13 +185,11 @@ async function fetchPSI(url, strategy) {
     body: JSON.stringify({ url, strategy })
   });
 
-  const text = await res.text();
-  if (!res.ok) throw new Error(text);
+  const data = await res.json();
 
-  const data = JSON.parse(text);
-  if (data.error) throw new Error(data.error);
   return data;
 }
+
 
 /* ---------------- UTIL ---------------- */
 
@@ -218,5 +214,6 @@ function scoreBox(label, score) {
     </div>
   `;
 }
+
 
 
