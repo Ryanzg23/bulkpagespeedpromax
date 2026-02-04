@@ -71,11 +71,19 @@ async function runCheck(url, card) {
   const mobile = await fetchPSI(url, "mobile");
 
   if (mobile.type === "redirect") {
+    const fromDomain = new URL(mobile.from).hostname.replace(/^www\./, "");
+    const toDomain = new URL(mobile.to).hostname.replace(/^www\./, "");
+  
     card.innerHTML = `
       <div class="domain">
-        ${url}
+        ${fromDomain}
         <span class="badge redirect">301</span>
       </div>
+  
+      <div style="margin:6px 0; color:#1e40af; font-size:13px;">
+        → ${toDomain}
+      </div>
+  
       <div class="error">
         301 domain detected.<br>
         PageSpeed checking skipped.
@@ -83,6 +91,7 @@ async function runCheck(url, card) {
     `;
     return;
   }
+
 
   if (mobile.type === "cloned") {
     card.innerHTML = `
@@ -214,6 +223,7 @@ function scoreBox(label, score) {
     </div>
   `;
 }
+
 
 
 
