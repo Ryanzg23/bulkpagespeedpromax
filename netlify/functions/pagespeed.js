@@ -1,21 +1,24 @@
 export async function handler(event) {
   try {
-    const body = JSON.parse(event.body || "{}");
-    let { url, strategy } = body;
+    const { url, strategy } = JSON.parse(event.body || "{}");
 
-    if (!url) {
-      return { statusCode: 400, body: JSON.stringify({ error: "URL required" }) };
+    if (!url || !strategy) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ error: "URL and strategy required" })
+      };
     }
 
-    if (!url.startsWith("http")) {
-      url = "https://" + url;
+    let finalUrl = url;
+    if (!finalUrl.startsWith("http")) {
+      finalUrl = "https://" + finalUrl;
     }
 
     const apiKey = process.env.PSI_API_KEY;
 
     const apiUrl =
       "https://www.googleapis.com/pagespeedonline/v5/runPagespeed" +
-      `?url=${encodeURIComponent(url)}` +
+      `?url=${encodeURIComponent(finalUrl)}` +
       `&strategy=${strategy}` +
       `&key=${apiKey}`;
 
@@ -25,7 +28,9 @@ export async function handler(event) {
     if (!res.ok) {
       return {
         statusCode: res.status,
-        body: JSON.stringify({ error: data?.error?.message || "PSI failed" })
+        body: JSON.stringify({
+          error: data?.error?.message || "PageSpeed failed"
+        })
       };
     }
 
@@ -35,7 +40,9 @@ export async function handler(event) {
     return {
       statusCode: 200,
       body: JSON.stringify({
-        score: Math.round(data.lighthouseResult.categories.performance.score * 100),
+        score: Math.round(
+          data.lighthouseResult.categories.performance.score * 100
+        ),
         metrics: {
           lcp: get("largest-contentful-paint"),
           cls: get("cumulative-layout-shift"),
