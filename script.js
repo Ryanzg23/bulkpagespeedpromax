@@ -2,6 +2,23 @@ const CONCURRENCY = 1;
 let completed = 0;
 let total = 0;
 
+const CLONE_KEYWORDS = [
+  "slot", "slots", "gacor", "resmi", "apk", "jaya",
+  "login", "maxwin", "rtp", "hoki"
+];
+
+const CLONE_TLDS = [".xyz", ".org", ".top", ".site"];
+
+function isLikelyCloned(url) {
+  const u = url.toLowerCase();
+
+  if (CLONE_KEYWORDS.some(k => u.includes(k))) return true;
+  if (CLONE_TLDS.some(tld => u.endsWith(tld))) return true;
+
+  return false;
+}
+
+
 async function run() {
   const urls = document.getElementById("urls").value
     .split("\n")
@@ -50,6 +67,27 @@ function createCard(url, results) {
 }
 
 async function runCheck(url, card) {
+  // 🚫 AUTO-SKIP CLONED SITES
+  if (isLikelyCloned(url)) {
+    card.innerHTML = `
+      <div class="domain">
+        ${url}
+        <span class="badge cloned">Cloned</span>
+      </div>
+
+      <div class="error">
+        PageSpeed too low – likely a cloned site.<br>
+        PageSpeed checking skipped.
+      </div>
+
+      <div class="actions">
+        <button onclick="openPSI('${url}','mobile')">Open PageSpeed</button>
+      </div>
+    `;
+    return;
+  }
+
+  // NORMAL PSI FLOW
   card.innerHTML = `
     <div class="domain">${url}</div>
     <div>Checking PageSpeed…</div>
@@ -84,6 +122,7 @@ async function runCheck(url, card) {
   } catch (err) {
     handlePsiFailure(url, card, err.message);
   }
+}
 }
 
 /* ---------------- ERROR CLASSIFICATION ---------------- */
@@ -164,4 +203,5 @@ function scoreBox(label, score) {
     </div>
   `;
 }
+
 
