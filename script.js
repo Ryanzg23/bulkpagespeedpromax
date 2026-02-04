@@ -1,41 +1,20 @@
-const CONCURRENCY = 2;
-
-async function run() {
-  const urls = document.getElementById("urls").value
-    .split("\n")
-    .map(u => u.trim())
-    .filter(Boolean);
-
-  const results = document.getElementById("results");
-  results.innerHTML = "";
-
-  const queue = [...urls];
-  const workers = [];
-
-  for (let i = 0; i < CONCURRENCY; i++) {
-    workers.push(worker(queue, results));
-  }
-
-  await Promise.all(workers);
-}
-
-async function worker(queue, results) {
-  while (queue.length) {
-    await checkUrl(queue.shift(), results);
-  }
-}
+const CONCURRENCY = 1; // IMPORTANT: keep low
 
 async function checkUrl(url, results) {
   const card = document.createElement("div");
   card.className = "card";
-  card.innerHTML = `<div class="domain">${url}</div><div>Checking…</div>`;
+  card.innerHTML = `<div class="domain">${url}</div><div>Checking mobile…</div>`;
   results.appendChild(card);
 
   try {
-    const [mobile, desktop] = await Promise.all([
-      fetchPSI(url, "mobile"),
-      fetchPSI(url, "desktop")
-    ]);
+    const mobile = await fetchPSI(url, "mobile");
+
+    card.innerHTML = `
+      <div class="domain">${url}</div>
+      <div>Mobile done… Checking desktop…</div>
+    `;
+
+    const desktop = await fetchPSI(url, "desktop");
 
     card.innerHTML = `
       <div class="domain">${url}</div>
@@ -70,27 +49,10 @@ async function fetchPSI(url, strategy) {
 
   const text = await res.text();
 
-  if (!res.ok) {
-    throw new Error(text);
-  }
+  if (!res.ok) throw new Error(text);
 
-  let data;
-  try {
-    data = JSON.parse(text);
-  } catch {
-    throw new Error("Invalid response from server");
-  }
-
+  const data = JSON.parse(text);
   if (data.error) throw new Error(data.error);
-  return data;
-}
 
-function scoreBox(label, score) {
-  const color = score >= 90 ? "green" : score >= 50 ? "yellow" : "red";
-  return `
-    <div class="score-box ${color}">
-      ${score}
-      <div class="label">${label}</div>
-    </div>
-  `;
+  return data;
 }
