@@ -1,27 +1,7 @@
 let completed = 0;
 let total = 0;
 
-/* ---------------- 301 DETECTION ---------------- */
-
-async function isRedirectDomain(url) {
-  try {
-    const testUrl = url.startsWith("http") ? url : "https://" + url;
-
-    const res = await fetch(testUrl, {
-      method: "HEAD",
-      redirect: "manual"
-    });
-
-    if ([301, 302, 307, 308].includes(res.status)) return true;
-    if (res.headers.get("location")) return true;
-
-    return false;
-  } catch {
-    return false;
-  }
-}
-
-/* ---------------- ENTRY POINT ---------------- */
+/* ---------------- ENTRY ---------------- */
 
 async function run() {
   const urls = document.getElementById("urls").value
@@ -52,7 +32,7 @@ function updateProgress() {
   bar.textContent = `${completed} / ${total}`;
 }
 
-/* ---------------- CARD LIFECYCLE ---------------- */
+/* ---------------- CARD FLOW ---------------- */
 
 function createCard(url, results) {
   const card = document.createElement("div");
@@ -62,37 +42,34 @@ function createCard(url, results) {
 }
 
 async function runCheck(url, card) {
-  card.innerHTML = `
-    <div class="domain">${url}</div>
-    <div>Checking…</div>
-  `;
+  card.innerHTML = `<div class="domain">${url}</div><div>Checking…</div>`;
 
-  // MOBILE
   const mobile = await fetchPSI(url, "mobile");
 
+  /* 301 DOMAIN */
   if (mobile.type === "redirect") {
-    const fromDomain = new URL(mobile.from).hostname.replace(/^www\./, "");
-    const toDomain = new URL(mobile.to).hostname.replace(/^www\./, "");
-  
+    const from = new URL(mobile.from).hostname.replace(/^www\./, "");
+    const to = new URL(mobile.to).hostname.replace(/^www\./, "");
+
     card.innerHTML = `
       <div class="domain">
-        ${fromDomain}
+        ${from}
         <span class="badge redirect">301</span>
       </div>
-  
-      <div style="margin:6px 0; color:#1e40af; font-size:13px;">
-        → ${toDomain}
-      </div>
-  
+      <div style="font-size:13px;color:#1e40af;">→ ${to}</div>
       <div class="error">
         301 domain detected.<br>
         PageSpeed checking skipped.
+      </div>
+      <div class="actions">
+        <a href="${getPageSpeedLink(url)}" target="_blank">PageSpeed Result</a>
+        <button onclick="copyPageSpeedLink('${url}', this)">Copy Link</button>
       </div>
     `;
     return;
   }
 
-
+  /* CLONED */
   if (mobile.type === "cloned") {
     card.innerHTML = `
       <div class="domain">
@@ -104,13 +81,14 @@ async function runCheck(url, card) {
         PageSpeed checking skipped.
       </div>
       <div class="actions">
-        <button onclick="openPSI('${url}','mobile')">Open PageSpeed</button>
+        <a href="${getPageSpeedLink(url)}" target="_blank">PageSpeed Result</a>
+        <button onclick="copyPageSpeedLink('${url}', this)">Copy Link</button>
       </div>
     `;
     return;
   }
 
-  // DESKTOP
+  /* DESKTOP PSI */
   const desktop = await fetchPSI(url, "desktop");
 
   card.innerHTML = `
@@ -134,58 +112,13 @@ async function runCheck(url, card) {
     </div>
 
     <div class="actions">
-      <button onclick="retryCard('${url}', this)">Retry</button>
-      <button onclick="openPSI('${url}','mobile')">Open Mobile</button>
-      <button onclick="openPSI('${url}','desktop')">Open Desktop</button>
+      <a href="${getPageSpeedLink(url)}" target="_blank">PageSpeed Result</a>
+      <button onclick="copyPageSpeedLink('${url}', this)">Copy Link</button>
     </div>
   `;
 }
 
-
-
-/* ---------------- ERROR HANDLING ---------------- */
-
-function handlePsiFailure(url, card, message) {
-  const lower = message.toLowerCase();
-  const isTimeout =
-    lower.includes("timeout") ||
-    lower.includes("sandbox") ||
-    lower.includes("timed out");
-
-  if (isTimeout) {
-    card.innerHTML = `
-      <div class="domain">
-        ${url}
-        <span class="badge cloned">Cloned</span>
-      </div>
-      <div class="error">
-        PageSpeed too low – likely a cloned site.<br>
-        PageSpeed checking skipped.
-      </div>
-      <div class="actions">
-        <button onclick="retryCard('${url}', this)">Retry</button>
-        <button onclick="openPSI('${url}','mobile')">Open PageSpeed</button>
-      </div>
-    `;
-  } else {
-    card.innerHTML = `
-      <div class="domain">${url}</div>
-      <div class="error">${message}</div>
-      <div class="actions">
-        <button onclick="retryCard('${url}', this)">Retry</button>
-      </div>
-    `;
-  }
-}
-
-/* ---------------- RETRY ---------------- */
-
-function retryCard(url, btn) {
-  const card = btn.closest(".card");
-  runCheck(url, card);
-}
-
-/* ---------------- PSI FETCH ---------------- */
+/* ---------------- FETCH ---------------- */
 
 async function fetchPSI(url, strategy) {
   const res = await fetch("/.netlify/functions/pagespeed", {
@@ -193,29 +126,27 @@ async function fetchPSI(url, strategy) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ url, strategy })
   });
-
-  const data = await res.json();
-
-  return data;
+  return await res.json();
 }
-
 
 /* ---------------- UTIL ---------------- */
 
-function openPSI(url, strategy) {
+function getPageSpeedLink(url) {
   if (!url.startsWith("http")) url = "https://" + url;
-  window.open(
-    `https://pagespeed.web.dev/report?url=${encodeURIComponent(url)}&form_factor=${strategy}`,
-    "_blank"
-  );
+  return `https://pagespeed.web.dev/report?url=${encodeURIComponent(url)}`;
+}
+
+function copyPageSpeedLink(url, btn) {
+  const link = getPageSpeedLink(url);
+  navigator.clipboard.writeText(link).then(() => {
+    const t = btn.textContent;
+    btn.textContent = "Copied!";
+    setTimeout(() => (btn.textContent = t), 1200);
+  });
 }
 
 function scoreBox(label, score) {
-  const color =
-    score >= 90 ? "green" :
-    score >= 50 ? "yellow" :
-    "red";
-
+  const color = score >= 90 ? "green" : score >= 50 ? "yellow" : "red";
   return `
     <div class="score-box ${color}">
       ${score}
@@ -223,7 +154,3 @@ function scoreBox(label, score) {
     </div>
   `;
 }
-
-
-
-
