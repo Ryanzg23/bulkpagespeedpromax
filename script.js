@@ -2,6 +2,33 @@ const CONCURRENCY = 1;
 let completed = 0;
 let total = 0;
 
+async function isRedirectDomain(url) {
+  try {
+    let testUrl = url.startsWith("http") ? url : "https://" + url;
+
+    const res = await fetch(testUrl, {
+      method: "HEAD",
+      redirect: "manual"
+    });
+
+    // 301 / 302 / 307 / 308
+    if ([301, 302, 307, 308].includes(res.status)) {
+      return true;
+    }
+
+    // Some hosts block HEAD but still send Location
+    if (res.headers.get("location")) {
+      return true;
+    }
+
+    return false;
+  } catch {
+    // Network errors → assume not redirect
+    return false;
+  }
+}
+
+
 /* ---------------- CLONE DETECTION ---------------- */
 
 const CLONE_KEYWORDS = [
@@ -62,6 +89,24 @@ function createCard(url, results) {
 }
 
 async function runCheck(url, card) {
+
+  /* 🔁 CHECK 301 FIRST */
+  const is301 = await isRedirectDomain(url);
+  if (is301) {
+    card.innerHTML = `
+      <div class="domain">
+        ${url}
+        <span class="badge redirect">301</span>
+      </div>
+
+      <div class="error">
+        301 domain detected.<br>
+        PageSpeed checking skipped.
+      </div>
+    `;
+    return;
+  }
+
   /* 🚫 AUTO-SKIP CLONED SITES */
   if (isLikelyCloned(url)) {
     card.innerHTML = `
@@ -81,6 +126,9 @@ async function runCheck(url, card) {
     `;
     return;
   }
+
+  /* ✅ NORMAL PSI FLOW CONTINUES BELOW */
+
 
   card.innerHTML = `
     <div class="domain">${url}</div>
@@ -199,3 +247,4 @@ function scoreBox(label, score) {
     </div>
   `;
 }
+
