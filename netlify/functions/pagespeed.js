@@ -10,6 +10,7 @@ export async function handler(event) {
       };
     }
 
+    // Normalize URL
     if (!url.startsWith("http://") && !url.startsWith("https://")) {
       url = "https://" + url;
     }
@@ -35,15 +36,20 @@ export async function handler(event) {
     }
 
     const lighthouse = data.lighthouseResult;
+    const audits = lighthouse.audits || {};
+
+    // ✅ SAFE ACCESS (no crashes)
+    const getAudit = (id) =>
+      audits[id]?.displayValue || "N/A";
 
     return {
       statusCode: 200,
       body: JSON.stringify({
         score: Math.round(lighthouse.categories.performance.score * 100),
         metrics: {
-          lcp: lighthouse.audits["largest-contentful-paint"].displayValue,
-          cls: lighthouse.audits["cumulative-layout-shift"].displayValue,
-          inp: lighthouse.audits["interaction-to-next-paint"].displayValue
+          lcp: getAudit("largest-contentful-paint"),
+          cls: getAudit("cumulative-layout-shift"),
+          inp: getAudit("interaction-to-next-paint")
         }
       })
     };
@@ -54,4 +60,3 @@ export async function handler(event) {
     };
   }
 }
-console.log("PSI key exists:", !!process.env.PSI_API_KEY);
