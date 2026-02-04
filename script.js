@@ -83,7 +83,7 @@ async function runCheck(url, card) {
     <div>Checking…</div>
   `;
 
-  /* 🔁 301 CHECK (FIRST) */
+  /* 🔁 1. 301 CHECK — HIGHEST PRIORITY */
   const is301 = await isRedirectDomain(url);
   if (is301) {
     card.innerHTML = `
@@ -91,6 +91,7 @@ async function runCheck(url, card) {
         ${url}
         <span class="badge redirect">301</span>
       </div>
+
       <div class="error">
         301 domain detected.<br>
         PageSpeed checking skipped.
@@ -99,17 +100,19 @@ async function runCheck(url, card) {
     return;
   }
 
-  /* 🚫 CLONED CHECK */
+  /* 🚫 2. CLONED CHECK — ONLY IF NOT 301 */
   if (isLikelyCloned(url)) {
     card.innerHTML = `
       <div class="domain">
         ${url}
         <span class="badge cloned">Cloned</span>
       </div>
+
       <div class="error">
         PageSpeed too low – likely a cloned site.<br>
         PageSpeed checking skipped.
       </div>
+
       <div class="actions">
         <button onclick="openPSI('${url}','mobile')">Open PageSpeed</button>
       </div>
@@ -117,7 +120,7 @@ async function runCheck(url, card) {
     return;
   }
 
-  /* ✅ PSI CHECK */
+  /* ✅ 3. REAL PSI CHECK */
   try {
     const mobile = await fetchPSI(url, "mobile");
     const desktop = await fetchPSI(url, "desktop");
@@ -235,3 +238,4 @@ function scoreBox(label, score) {
     </div>
   `;
 }
+
