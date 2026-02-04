@@ -1,39 +1,11 @@
-const CONCURRENCY = 1;
 let completed = 0;
 let total = 0;
-
-async function isRedirectDomain(url) {
-  try {
-    let testUrl = url.startsWith("http") ? url : "https://" + url;
-
-    const res = await fetch(testUrl, {
-      method: "HEAD",
-      redirect: "manual"
-    });
-
-    // 301 / 302 / 307 / 308
-    if ([301, 302, 307, 308].includes(res.status)) {
-      return true;
-    }
-
-    // Some hosts block HEAD but still send Location
-    if (res.headers.get("location")) {
-      return true;
-    }
-
-    return false;
-  } catch {
-    // Network errors → assume not redirect
-    return false;
-  }
-}
-
 
 /* ---------------- CLONE DETECTION ---------------- */
 
 const CLONE_KEYWORDS = [
-  "slot", "slots", "gacor", "resmi", "apk", "jaya",
-  "login", "maxwin", "rtp", "hoki"
+  "slot", "slots", "gacor", "resmi", "apk",
+  "jaya", "login", "maxwin", "rtp", "hoki"
 ];
 
 const CLONE_TLDS = [".xyz", ".top", ".site"];
@@ -45,7 +17,27 @@ function isLikelyCloned(url) {
   return false;
 }
 
-/* ---------------- ENTRY POINT (BUTTON) ---------------- */
+/* ---------------- 301 DETECTION ---------------- */
+
+async function isRedirectDomain(url) {
+  try {
+    const testUrl = url.startsWith("http") ? url : "https://" + url;
+
+    const res = await fetch(testUrl, {
+      method: "HEAD",
+      redirect: "manual"
+    });
+
+    if ([301, 302, 307, 308].includes(res.status)) return true;
+    if (res.headers.get("location")) return true;
+
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+/* ---------------- ENTRY POINT ---------------- */
 
 async function run() {
   const urls = document.getElementById("urls").value
@@ -60,10 +52,7 @@ async function run() {
   const results = document.getElementById("results");
   results.innerHTML = "";
 
-  const queue = [...urls];
-
-  while (queue.length) {
-    const url = queue.shift();
+  for (const url of urls) {
     await createCard(url, results);
     completed++;
     updateProgress();
@@ -89,8 +78,12 @@ function createCard(url, results) {
 }
 
 async function runCheck(url, card) {
+  card.innerHTML = `
+    <div class="domain">${url}</div>
+    <div>Checking…</div>
+  `;
 
-  /* 🔁 CHECK 301 FIRST */
+  /* 🔁 301 CHECK (FIRST) */
   const is301 = await isRedirectDomain(url);
   if (is301) {
     card.innerHTML = `
@@ -98,7 +91,6 @@ async function runCheck(url, card) {
         ${url}
         <span class="badge redirect">301</span>
       </div>
-
       <div class="error">
         301 domain detected.<br>
         PageSpeed checking skipped.
@@ -107,19 +99,17 @@ async function runCheck(url, card) {
     return;
   }
 
-  /* 🚫 AUTO-SKIP CLONED SITES */
+  /* 🚫 CLONED CHECK */
   if (isLikelyCloned(url)) {
     card.innerHTML = `
       <div class="domain">
         ${url}
         <span class="badge cloned">Cloned</span>
       </div>
-
       <div class="error">
         PageSpeed too low – likely a cloned site.<br>
         PageSpeed checking skipped.
       </div>
-
       <div class="actions">
         <button onclick="openPSI('${url}','mobile')">Open PageSpeed</button>
       </div>
@@ -127,14 +117,7 @@ async function runCheck(url, card) {
     return;
   }
 
-  /* ✅ NORMAL PSI FLOW CONTINUES BELOW */
-
-
-  card.innerHTML = `
-    <div class="domain">${url}</div>
-    <div>Checking PageSpeed…</div>
-  `;
-
+  /* ✅ PSI CHECK */
   try {
     const mobile = await fetchPSI(url, "mobile");
     const desktop = await fetchPSI(url, "desktop");
@@ -149,10 +132,14 @@ async function runCheck(url, card) {
 
       <div class="metrics">
         <strong>Mobile</strong><br>
-        LCP: ${mobile.metrics.lcp} | CLS: ${mobile.metrics.cls} | INP: ${mobile.metrics.inp}
+        LCP: ${mobile.metrics.lcp} |
+        CLS: ${mobile.metrics.cls} |
+        INP: ${mobile.metrics.inp}
         <br><br>
         <strong>Desktop</strong><br>
-        LCP: ${desktop.metrics.lcp} | CLS: ${desktop.metrics.cls} | INP: ${desktop.metrics.inp}
+        LCP: ${desktop.metrics.lcp} |
+        CLS: ${desktop.metrics.cls} |
+        INP: ${desktop.metrics.inp}
       </div>
 
       <div class="actions">
@@ -170,7 +157,6 @@ async function runCheck(url, card) {
 
 function handlePsiFailure(url, card, message) {
   const lower = message.toLowerCase();
-
   const isTimeout =
     lower.includes("timeout") ||
     lower.includes("sandbox") ||
@@ -182,12 +168,10 @@ function handlePsiFailure(url, card, message) {
         ${url}
         <span class="badge cloned">Cloned</span>
       </div>
-
       <div class="error">
         PageSpeed too low – likely a cloned site.<br>
         PageSpeed checking skipped.
       </div>
-
       <div class="actions">
         <button onclick="retryCard('${url}', this)">Retry</button>
         <button onclick="openPSI('${url}','mobile')">Open PageSpeed</button>
@@ -204,7 +188,7 @@ function handlePsiFailure(url, card, message) {
   }
 }
 
-/* ---------------- RETRY (SAME CARD) ---------------- */
+/* ---------------- RETRY ---------------- */
 
 function retryCard(url, btn) {
   const card = btn.closest(".card");
@@ -239,7 +223,11 @@ function openPSI(url, strategy) {
 }
 
 function scoreBox(label, score) {
-  const color = score >= 90 ? "green" : score >= 50 ? "yellow" : "red";
+  const color =
+    score >= 90 ? "green" :
+    score >= 50 ? "yellow" :
+    "red";
+
   return `
     <div class="score-box ${color}">
       ${score}
@@ -247,4 +235,3 @@ function scoreBox(label, score) {
     </div>
   `;
 }
-
