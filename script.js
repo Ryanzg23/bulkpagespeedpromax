@@ -1,47 +1,26 @@
-const CONCURRENCY = 3;
-
-async function run() {
-  const urls = document
-    .getElementById("urls")
-    .value.split("\n")
-    .map(u => u.trim())
-    .filter(Boolean);
-
-  const results = document.getElementById("results");
-  results.innerHTML = "";
-
-  const queue = [...urls];
-  const workers = [];
-
-  for (let i = 0; i < CONCURRENCY; i++) {
-    workers.push(worker(queue, results));
-  }
-
-  await Promise.all(workers);
-}
-
-async function worker(queue, results) {
-  while (queue.length) {
-    const url = queue.shift();
-    await checkUrl(url, results);
-  }
-}
-
 async function checkUrl(url, results) {
   const card = document.createElement("div");
   card.className = "card";
-  card.textContent = `Checking ${url}...`;
+  card.innerHTML = `<strong>${url}</strong><div>Checking…</div>`;
   results.appendChild(card);
 
   try {
     const res = await fetch("/.netlify/functions/pagespeed", {
       method: "POST",
-      body: JSON.stringify({ url, strategy: "mobile" })
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        url,
+        strategy: "mobile"
+      })
     });
 
     const data = await res.json();
 
-    if (data.error) throw new Error(data.error);
+    if (!res.ok || data.error) {
+      throw new Error(data.error || "Failed");
+    }
 
     card.innerHTML = `
       <strong>${url}</strong>
@@ -53,13 +32,7 @@ async function checkUrl(url, results) {
   } catch (e) {
     card.innerHTML = `
       <strong>${url}</strong>
-      <div class="error">Error</div>
+      <div class="error">${e.message}</div>
     `;
   }
-}
-
-function scoreColor(score) {
-  if (score >= 90) return "green";
-  if (score >= 50) return "yellow";
-  return "red";
 }
