@@ -4,14 +4,10 @@ export async function handler(event) {
     let { url, strategy } = body;
 
     if (!url) {
-      return {
-        statusCode: 400,
-        body: JSON.stringify({ error: "URL required" })
-      };
+      return { statusCode: 400, body: JSON.stringify({ error: "URL required" }) };
     }
 
-    // Normalize URL
-    if (!url.startsWith("http://") && !url.startsWith("https://")) {
+    if (!url.startsWith("http")) {
       url = "https://" + url;
     }
 
@@ -20,7 +16,7 @@ export async function handler(event) {
     const apiUrl =
       "https://www.googleapis.com/pagespeedonline/v5/runPagespeed" +
       `?url=${encodeURIComponent(url)}` +
-      `&strategy=${strategy || "mobile"}` +
+      `&strategy=${strategy}` +
       `&key=${apiKey}`;
 
     const res = await fetch(apiUrl);
@@ -29,27 +25,21 @@ export async function handler(event) {
     if (!res.ok) {
       return {
         statusCode: res.status,
-        body: JSON.stringify({
-          error: data?.error?.message || "PageSpeed API failed"
-        })
+        body: JSON.stringify({ error: data?.error?.message || "PSI failed" })
       };
     }
 
-    const lighthouse = data.lighthouseResult;
-    const audits = lighthouse.audits || {};
-
-    // ✅ SAFE ACCESS (no crashes)
-    const getAudit = (id) =>
-      audits[id]?.displayValue || "N/A";
+    const audits = data.lighthouseResult.audits || {};
+    const get = (id) => audits[id]?.displayValue || "N/A";
 
     return {
       statusCode: 200,
       body: JSON.stringify({
-        score: Math.round(lighthouse.categories.performance.score * 100),
+        score: Math.round(data.lighthouseResult.categories.performance.score * 100),
         metrics: {
-          lcp: getAudit("largest-contentful-paint"),
-          cls: getAudit("cumulative-layout-shift"),
-          inp: getAudit("interaction-to-next-paint")
+          lcp: get("largest-contentful-paint"),
+          cls: get("cumulative-layout-shift"),
+          inp: get("interaction-to-next-paint")
         }
       })
     };
